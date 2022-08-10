@@ -16,8 +16,318 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+				<section>
+					<h3>Change Detection Strategy</h3>				
+				</section>
+				<section style="font-size: 35px;">
+					<ol>
+						<li>Разработчик обновляет модель данных</li>
+						<li>Angular обнаруживает изменение</li>
+						<li>Проверяется каждый компонент в дереве компонентов сверху вниз, чтобы увидеть, изменилась ли соответствующая модель.</li>
+						<li>Если есть новое значение, оно обновит представление компонента (DOM)</li>
+					</ol>
+				</section>
+				<section>
+					<p style="font-size: 45px;">Zone.js</p>
+					<ul style="font-size: 35px;">
+						<li>любое событие браузера (щелчок, нажатие клавиши и т.д.)</li>
+						<li>setInterval() и setTimeout()</li>
+						<li>HTTP-запросы через XMLHttpRequest</li>
+					</ul>
+				</section>
+				<section style="font-size: 31px;">
+					<p style="font-size: 35px;">ChangeDetectionStrategy.Default</p>
+					<pre><code>
+						@Component({
+							selector: 'hello',
+							template: `
+								<h1>Hello {{name}}!</h1>
+								{{runChangeDetection}}
+							`
+						})
+						export class HelloComponent {
+							@Input() name: string;
+							get runChangeDetection() {
+								console.log('Checking the view');
+								return true;
+							}
+						}
+					</code></pre>
+					<pre><code>
+						@Component({
+							selector: 'app-root',
+							template: `
+								<hello></hello>
+								<button (click)="onClick()">Trigger change detection</button>
+							`
+						})
+						export class AppComponent {
+							onClick() {}
+						}
+					</code></pre>
+				</section>
+				<section style="font-size: 45px;">
+					<section>
+						<p>ChangeDetectionStrategy.OnPush</p>
+						<ul style="font-size: 31px;">
+							<li>входная ссылка изменилась</li>
+							<li>компонент или один из его дочерних элементов запускает обработчик событий</li>
+							<li>обнаружение изменений запускается вручную</li>
+							<li>наблюдаемый объект, связанный с шаблоном через async пайп, выдает новое значение</li>
+						</ul>
+					</section>
+					<section style="font-size: 25px;"><p style="font-size: 31px;">1. Изменилась ссылка input параметра</p>
+						<pre><code>
+							@Component({
+								selector: 'tooltip',
+								template: `
+									<h1>{{config.position}}</h1>
+									{{runChangeDetection}}
+								`,
+								changeDetection: ChangeDetectionStrategy.OnPush
+							})
+							export class TooltipComponent {
+								@Input() config;
+								get runChangeDetection() {
+									console.log('Checking the view');
+									return true;
+								}
+							}
+						</code></pre>
+						<pre><code>
+							@Component({
+								selector: 'app-root',
+								template: `
+									<tooltip [config]="config"></tooltip>
+									<button (click)="onClick()">Click</button>
+								`
+							})
+							export class AppComponent {
+								config = {
+									position: 'top'
+								};
+							
+								onClick() {
+									this.config.position = 'bottom';
+								}
+							}
+						</code></pre>
+					</section>
+					<section style="font-size: 30px;"><p style="font-size: 31px;">1. Изменилась ссылка input параметра</p>
+						<pre><code>
+							@Component({
+								selector: 'app-root',
+								template: `
+									<tooltip [config]="config"></tooltip>
+									<button (click)="onClick()">Click</button>
+								`
+							})
+							export class AppComponent {
+								config = {
+									position: 'top'
+								};
+							
+								onClick() {
+									this.config = {
+										position: 'bottom'
+									}
+								}
+							}
+						</code></pre>
+					</section>
+					<section style="font-size: 30px;">
+						<p style="font-size: 35px;">2. Событие внутри компонента или его потомках</p>
+						<pre><code>
+							@Component({
+								selector: '',
+								template: `
+									<button (click)="add()">Add</button>
+									{{count}}
+								`,
+								changeDetection: ChangeDetectionStrategy.OnPush
+							})
+							export class CounterComponent {
+								count = 0;
+								add() {
+									this.count++;
+								}
+							}
+						</code></pre>
+					</section>
+					<section>
+						<p style="font-size: 35px;">2. Событие внутри компонента или его потомках</p>
+						<p style="font-size: 33px; color: red;"> ! Не запускают обнаружение изменений при onPush</p>
+						<ul  style="font-size: 30px;">
+							<li>setTimeout</li>
+							<li>setInterval</li>
+							<li>romise.resolve().then() (то же самое для Promise.reject().then())</li>
+							<li>this.http.get('...').subscribe() (любая наблюдаемая подписка RxJS)</li>
+						</ul>
+					</section>
+					<section style="font-size: 31px;">
+						<p style="font-size: 35px;">3. Ручной запуск обнаружения изменений</p>
+						<p style="font-size: 31px;"> detectChanges()</p>
+						<pre><code>
+							@Component({
+								selector: 'counter',
+								template: `{{count}}`,
+								changeDetection: ChangeDetectionStrategy.OnPush
+							})
+							export class CounterComponent { 
+								count = 0;
+							
+								constructor(private cdr: ChangeDetectorRef) {
+									setTimeout(() => {
+										this.count = 5;
+										this.cdr.detectChanges();
+									}, 1000);
+								}
+							}
+						</code></pre>
+					</section>
+					<section style="font-size: 31px;">
+						<p style="font-size: 35px;">3. Ручной запуск обнаружения изменений</p>
+						<p style="font-size: 31px;"> ApplicationRef.tick()</p>
+						<pre><code>
+							tick() {
+								try {
+									this._views.forEach((view) => view.detectChanges());
+									...
+								} catch (e) {
+									...
+								}
+							}
+						</code></pre>
+					</section>
+					<section style="font-size: 31px;">
+						<p style="font-size: 35px;">3. Ручной запуск обнаружения изменений</p>
+						<p style="font-size: 31px;"> markForCheck()</p>
+						<pre><code>
+							markForCheck(): void { 
+								markParentViewsForCheck(this._view); 
+							}
+							
+							export function markParentViewsForCheck(view: ViewData) {
+								let currView: ViewData|null = view;
+								while (currView) {
+									if (currView.def.flags & ViewFlags.OnPush) {
+										currView.state |= ViewState.ChecksEnabled;
+									}
+									currView = currView.viewContainerParent || currView.parent;
+								}
+							}
+						</code></pre>
+					</section>
+					<section style="font-size: 23px;">
+						<p style="font-size: 27px;">4. Аngular Async пайп</p>
+						<pre><code>
+							@Component({
+								selector: 'app-root',
+								template: `
+									<button (click)="add()">Add</button>
+									<app-list [items]="items$"></app-list>
+								`
+							})
+							export class AppComponent {
+								items = [];
+								items$ = new BehaviorSubject(this.items);
+							
+								add() {
+									this.items.push({ title: Math.random() })
+									this.items$.next(this.items);
+								}
+							}
+						</code></pre>
+						<pre><code>
+							@Component({
+								selector: 'app-list',
+								template: `
+								<div *ngFor="let item of items | async">{{item.title}}</div>
+								`,
+								changeDetection: ChangeDetectionStrategy.OnPush
+							})
+							export class ListComponent implements OnInit {
+								@Input() items: Observable<Item[]>;
+								_items: Item[];
+							
+								ngOnInit() {
+									this.items.subscribe(items => {
+										this._items = items;
+									});
+								}
+							}
+						</code></pre>
+					</section>
+				</section>
+				<section>
+					<section style="font-size: 26px;">
+						<p style="font-size: 27px;">Пример - Default</p>
+						<pre><code>
+							@Component({
+								selector: 'app-todos',
+								template: `
+									 <div *ngFor="let todo of todos">
+										 {{todo.title}} - {{runChangeDetection}}
+									 </div>
+								`,
+								changeDetection: ChangeDetectionStrategy.OnPush
+							})
+							export class TodosComponent {
+								@Input() todos;
+							
+								get runChangeDetection() {
+									console.log('TodosComponent - Checking the view');
+									return true;
+								}
+							}
+						</code></pre>
+						<pre><code>
+							@Component({
+								template: `
+									<button (click)="add()">Add</button>
+									<app-todos [todos]="todos"></app-todos>
+								`
+							})
+							export class AppComponent {
+								todos = [{ title: 'One' }, { title: 'Two' }];
+							
+								add() {
+									this.todos = [...this.todos, { title: 'Three' }];
+								}
+							}
+						</code></pre>
+					</section>
+					<section style="font-size: 28px;">
+						<p style="font-size: 27px;">Пример - OnPush</p>
+						<pre><code>
+							@Component({
+								selector: 'app-todos',
+								template: `
+									<app-todo [todo]="todo" *ngFor="let todo of todos"></app-todo>
+								`,
+								changeDetection: ChangeDetectionStrategy.OnPush
+							})
+							export class TodosComponent {
+								@Input() todos;
+							}
+						</code></pre>
+						<pre><code>
+							@Component({
+								selector: 'app-todo',
+								template: `{{todo.title}} {{runChangeDetection}}`,
+								changeDetection: ChangeDetectionStrategy.OnPush
+							})
+							export class TodoComponent {
+								@Input() todo;
+							
+								get runChangeDetection() {
+									console.log('TodoComponent - Checking the view');
+									return true;
+								}
+							}
+						</code></pre>
+					</section>
+				</section>
 			</div>
 		</div>
 
